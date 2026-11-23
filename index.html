@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Входящие заявки</title>
+    <style>
+        body { max-width: 40rem; margin: 2rem auto; padding: 0 1rem; font: 1rem/1.5 system-ui, sans-serif; }
+        textarea { box-sizing: border-box; display: block; width: 100%; margin: .5rem 0; padding: .5rem; font: inherit; }
+        button { padding: .4rem .8rem; font: inherit; }
+        #result { white-space: pre-wrap; margin-top: 1rem; }
+        .ready .topic { font-weight: 600; margin-bottom: .5rem; }
+        .manual { padding: .75rem; background: #fff4e5; border-left: 4px solid #f90; border-radius: 4px; }
+        .invalid { color: #b00020; }
+    </style>
+</head>
+<body>
+<h1>Входящие заявки</h1>
+<form>
+    <label for="message">Текст заявки</label>
+    <textarea id="message" rows="4"></textarea>
+    <button type="submit">Разобрать заявку</button>
+</form>
+<div id="result" aria-live="polite"></div>
+
+<script type="module">
+    const form = document.querySelector("form");
+    const result = document.querySelector("#result");
+
+    function clearResult() {
+        result.textContent = "";
+        result.className = "";
+    }
+
+    function renderReady(topic, draft) {
+        result.textContent = "";
+        result.className = "ready";
+        const topicEl = document.createElement("div");
+        topicEl.className = "topic";
+        topicEl.textContent = "Тема: " + topic;
+        const draftEl = document.createElement("div");
+        draftEl.textContent = "Черновик ответа: " + draft;
+        result.append(topicEl, draftEl);
+    }
+
+    function renderManual() {
+
+        result.textContent = "";
+        result.className = "manual";
+        result.textContent =
+            "Не удалось обработать заявку автоматически. Передано менеджеру на ручной разбор.";
+    }
+
+    function renderInvalid() {
+        result.textContent = "";
+        result.className = "invalid";
+        result.textContent = "Введите текст заявки.";
+    }
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const text = document.querySelector("#message").value;
+
+        let data;
+        try {
+            const reply = await fetch("/api/triage", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text }),
+            });
+            data = await reply.json();
+        } catch {
+            clearResult();
+            result.className = "manual";
+            result.textContent = "Нет связи с сервером. Попробуйте ещё раз.";
+            return;
+        }
+
+        if (data.status === "ready") {
+            renderReady(data.topic, data.draft);
+        } else if (data.status === "manual_review") {
+            renderManual();
+        } else if (data.status === "invalid_input") {
+            renderInvalid();
+        } else {
+            clearResult();
+            result.textContent = "Неизвестный ответ сервера.";
+        }
+    });
+</script>
+</body>
+</html>
